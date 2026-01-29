@@ -1,2 +1,2 @@
-# KMNIST-Classification-System
-KMNIST Hiragana Classification Microservice System
+# K49-Classification-System
+K49 Hiragana Classification Microservice System
