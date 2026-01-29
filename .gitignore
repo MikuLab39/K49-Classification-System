@@ -10,8 +10,8 @@ env/
 venv/
 
 # Data & Models 
-data/*.npz
-data/*.csv
+data/**/*.npz
+data/**/*.csv
 *.pth
 *.pt
 *.pkl
