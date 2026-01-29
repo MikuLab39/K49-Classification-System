@@ -9,11 +9,17 @@ __pycache__/
 env/
 venv/
 
-# Data & Models (不要提交大文件)
-data/
+# Data & Models 
+data/*.npz
+data/*.csv
 *.pth
-*.h5
+*.pt
+*.pkl
 
 # IDEs
 .vscode/
 .idea/
+.DS_Store
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints/
