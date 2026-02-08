@@ -1,4 +1,311 @@
-# K49-Classification-System
-K49 Hiragana Classification Microservice System
+# K49 Hiragana Classification System
 
-Docker:https://hub.docker.com/r/mikulab/k49-api
+## Project Overview
+This project focuses on building a machine learning model to classify Japanese Hiragana characters using the **Kuzushiji-49 (K49)** dataset. The system covers the complete pipeline from data loading and Exploratory Data Analysis (EDA) to model training and evaluation. 
+
+The goal is to demonstrate a reproducible machine learning workflow, utilizing Docker to ensure a consistent execution environment.
+
+## Installation & Requirements
+To ensure the program runs correctly and is easy to reproduce, we strongly recommend using **Docker**. You can either build the image locally or pull the pre-built image.
+
+**Prerequisites:**
+* Docker installed on your machine.
+
+### Option 1: Build from Source (Local Build)
+If you want to verify the code and build the environment yourself:
+
+1.  Clone the repository:
+    ```bash
+    git clone [https://github.com/MikuLab39/K49-Classification-System.git](https://github.com/MikuLab39/K49-Classification-System.git)
+    cd K49-Classification-System
+    ```
+```bash
+K49-Classification-System/
+├── static/
+├── src/
+├── model.pth
+├── Dockerfile
+└── requirements.txt
+
+ ```
+2.  Build the Docker image using the provided `Dockerfile`:
+    ```bash
+    # Build the image and tag it as 'k49-api'
+    docker build -t k49-api .
+    ```
+3.  Run the container:
+    ```bash
+    # Run the container
+    docker run -it k49-api
+    ```
+
+### Option 2: Quick Start with Docker Compose (Recommended)
+If you prefer a quick setup using the pre-built image, you can use `docker-compose`.
+
+1.  Ensure you have the `docker-compose.yml` file in your directory.
+```bash
+version: '3.8'
+
+services:
+  k49api-server:
+    image: mikulab/k49-api:latest
+    restart: always
+    container_name: k49api-server
+    ports:
+      - "8339:8000"
+    environment:
+      - REDIS_URL=redis://k49api-redis:6379
+    depends_on:
+      - k49api-redis
+    command: uvicorn src.api:app --host 0.0.0.0 --port 8000
+
+  k49api-redis:
+    image: redis:alpine
+    container_name: k49api-redis
+
+  k49api-worker:
+    image: mikulab/k49-api:latest
+    container_name: k49api-worker
+    restart: always
+    environment:
+      - REDIS_URL=redis://k49api-redis:6379
+    depends_on:
+      - k49api-redis
+    command: python -m src.worker
+
+```
+
+2.  Run the service in the background:
+    ```bash
+    docker-compose up -d
+    ```
+3.  **Access the Web UI:**
+    Once the container is running, open your browser and navigate to:
+    `http://localhost:8339` (or the port defined in your configuration).
+
+    > **Production Tip:** For a production environment, it is highly recommended to configure an **Nginx** reverse proxy and enable **HTTPS** for security. 
+
+# Web API Reference 
+
+The system provides a RESTful API built with **FastAPI**. It supports both **synchronous** (real-time) and **asynchronous** (batch processing) predictions, designed to meet the advanced requirements for scalability.
+
+> **Interactive Documentation:**
+> Once the server is running, you can access the interactive Swagger UI at: `http://localhost:8339/docs`
+
+## 1. General Info
+
+### Health Check
+Check if the API server is running correctly.
+
+* **URL:** `/`
+* **Method:** `GET`
+* **Response:**
+  ```json
+  {
+    "status": "ok",
+    "version": "2.0"
+  }
+
+## 2. Synchronous Prediction (Single Image)
+
+Use this endpoint for real-time inference of a single image. The server processes the request immediately and returns the result. This is suitable for low-latency requirements.
+
+- **URL:** `/predict`
+- **Method:** `POST`
+- **Content-Type:** `multipart/form-data`
+
+### Request Parameters
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `file` | Binary (File) | Yes | The image file to classify (jpg, png, etc.). |
+
+### Example Request (cURL)
+
+```bash
+curl -X POST "http://localhost:8339/predict" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@./test_image.png"
+  ```
+### Example Response
+```json
+{
+  "prediction": "あ",
+  "class_id": 0,
+  "confidence": 0.98
+}
+```
+## 3. Asynchronous Batch Prediction (Multiple Images)
+
+Use this endpoint for processing multiple images at once. This is designed for scalability and high-throughput scenarios. The API returns a `task_id` immediately, while the prediction process runs in the background.
+
+- **URL:** `/batch_predict`
+- **Method:** `POST`
+- **Content-Type:** `multipart/form-data`
+
+### Request Parameters
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `files` | Array of Binary | Yes | A list of image files to classify. |
+
+### Example Request (cURL)
+
+```bash
+curl -X POST "http://localhost:8339/batch_predict" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "files=@./image1.png" \
+  -F "files=@./image2.png"
+```
+### Example Response
+Returns a Task ID for tracking the job status.
+```json
+{
+  "task_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "processing"
+}
+```
+## 4. Get Task Result
+
+Retrieve the results of an asynchronous batch prediction using the task_id.
+
+- **URL:** `/tasks/{task_id}`
+- **Method:** `GET`
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `task_id` | String | Yes | The UUID received from the `/batch_predict` endpoint. |
+
+### Example Request (cURL)
+
+**Bash**
+```bash
+curl -X GET "http://localhost:8339/tasks/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+```
+### Example Response
+```json
+{
+  "task_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "status": "completed",
+  "results": [
+    {
+      "filename": "image1.png",
+      "prediction": "あ",
+      "confidence": 0.98
+    },
+    {
+      "filename": "image2.png",
+      "prediction": "い",
+      "confidence": 0.95
+    }
+  ]
+}
+```
+
+## Dataset Preparation
+This project utilizes the **Kuzushiji-49 (K49)** dataset.
+Please download the dataset from the official link: [KMNIST Dataset](http://codh.rois.ac.jp/kmnist/index.html.en)
+
+1. Download the `.npz` files for Kuzushiji-49.
+2. Place them in the `data/k49/` directory so the structure looks like this:
+   ```text
+   K49-Classification-System/
+   ├── data/
+   │   └── k49/
+   │       ├── k49-train-imgs.npz
+   │       ├── k49-train-labels.npz
+   │       ├── k49-test-imgs.npz
+   │       └── k49-test-labels.npz
+
+
+## Model Development (Jupyter Notebook)
+
+For a detailed walkthrough of the machine learning pipeline—including **Exploratory Data Analysis (EDA)**, **Model Training**, and **Performance Verification**—please refer to the provided Jupyter Notebook.
+
+This notebook demonstrates the complete workflow for the project, covering data distribution analysis, model architecture selection, and evaluation metrics.
+
+---
+
+### Chinese Version (中文版)
+
+
+# K49 平假名分類系統 (K49 Hiragana Classification System)
+
+## 專案簡介 (Project Overview)
+本專案旨在建立一個機器學習模型，用於分類 **Kuzushiji-49 (K49)** 資料集中的日本平假名字符。系統涵蓋了從資料讀取、探索性資料分析 (EDA) 到模型訓練與評估的完整流程。
+
+本專案重點在於展示可重現的機器學習工作流，並使用 Docker 來確保執行環境的一致性。
+
+## 環境設定 (Installation & Requirements)
+為了確保程式能正確執行並易於重現，強烈建議使用 **Docker**。您可以選擇在本地建置映像檔 (Image)，或是直接拉取已建置好的映像檔。
+
+**事前準備：**
+* 請確保您的電腦已安裝 Docker。
+
+### 選項 1：從原始碼建置 (Local Build)
+如果您想檢查程式碼並自行建置環境：
+
+1.  複製專案 (Clone)：
+    ```bash
+    git clone [https://github.com/MikuLab39/K49-Classification-System.git](https://github.com/MikuLab39/K49-Classification-System.git)
+    cd K49-Classification-System
+    ```
+2.  使用 `Dockerfile` 建置映像檔：
+    ```bash
+    # 建置映像檔並標記為 'k49-classifier'
+    docker build -t k49-classifier .
+    ```
+3.  執行容器：
+    ```bash
+    # 啟動容器
+    docker run -it k49-classifier
+    ```
+
+### 選項 2：使用 Docker Compose 快速啟動 (推薦)
+如果您希望使用預建的映像檔進行快速設定，可以使用 `docker-compose`。
+
+1.  請確保您的目錄中已有 `docker-compose.yml` 設定檔。
+```bash
+version: '3.8'
+
+services:
+  k49api-server:
+    image: mikulab/k49-api:latest
+    restart: always
+    container_name: k49api-server
+    ports:
+      - "8339:8000"
+    environment:
+      - REDIS_URL=redis://k49api-redis:6379
+    depends_on:
+      - k49api-redis
+    command: uvicorn src.api:app --host 0.0.0.0 --port 8000
+
+  k49api-redis:
+    image: redis:alpine
+    container_name: k49api-redis
+
+  k49api-worker:
+    image: mikulab/k49-api:latest
+    container_name: k49api-worker
+    restart: always
+    environment:
+      - REDIS_URL=redis://k49api-redis:6379
+    depends_on:
+      - k49api-redis
+    command: python -m src.worker
+
+```
+2.  在背景啟動服務：
+    ```bash
+    docker-compose up -d
+    ```
+3.  **存取 Web UI 介面：**
+    容器啟動後，請開啟瀏覽器並訪問：
+    `http://localhost:8339` (或您設定檔中定義的連接埠)。
+
+    > **生產環境建議：** 若部署於生產環境，強烈建議配置 **Nginx** 反向代理 (Reverse Proxy) 並啟用 **HTTPS** 以確保安全性。
