@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMNIST Hiragana Recognizer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%2339C5BB'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-size='60' fill='white' font-weight='bold'>M</text></svg>">
+
+<style>
+    /* 核心：以 #39C5BB 为绝对视觉中心 */
+    body { 
+        background-color: #ffffff; /* 纯白背景，让主色更跳跃 */
+        font-family: 'Inter', -apple-system, system-ui, sans-serif; 
+        color: #2D3748; 
+    }
+
+    /* 移除渐变，改为纯色 */
+    .navbar { 
+        background-color: #39C5BB; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* 极淡的投影增加层次 */
+    }
+
+    .drop-zone {
+        border: 2px dashed #E2E8F0; 
+        border-radius: 16px; /* 稍微加大圆角，更现代 */
+        padding: 40px; 
+        text-align: center;
+        background: #F8FAFC; /* 浅灰底色区别于背景 */
+        transition: all 0.2s ease;
+    }
+
+    .drop-zone:hover { 
+        border-color: #39C5BB; 
+        background-color: #ffffff; 
+        /* 这里的变换保持极简 */
+        transform: translateY(-2px); 
+    }
+
+    .result-card { 
+        border: 1px solid #EDF2F7;
+        border-radius: 16px;
+        background: white;
+        transition: box-shadow 0.3s ease;
+    }
+
+    .result-card:hover { 
+        /* 使用更大、更淡的阴影，营造悬浮感 */
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); 
+    }
+
+    .char-display { 
+        font-size: 5rem; 
+        font-weight: 900; 
+        color: #39C5BB; /* 纯色展示 */
+        letter-spacing: -2px; 
+    }
+
+
+    /* 补上这一段即可隐藏那个一直显示的动画 */
+    .loader { 
+        display: none; 
+    }
+
+    .nav-pills .nav-link { 
+        color: #718096; 
+        border-radius: 8px;
+        margin: 0 4px;
+    }
+
+    .nav-pills .nav-link.active { 
+        background-color: #39C5BB !important; /* 纯色激活态 */
+        color: white;
+    }
+
+    /* 辅助：如果是按钮，也应保持纯色 */
+    .btn-primary {
+        background-color: #39C5BB;
+        border: none;
+        font-weight: 600;
+    }
+    .btn-primary:hover {
+        background-color: #2eb1a8; /* 悬停时仅加深一点点，不使用渐变 */
+    }
+    .footer-link {
+    color: #39C5BB;      /* 使用你的主色 */
+    text-decoration: none; /* 默认去掉下划线 */
+    transition: all 0.2s ease;
+    }
+
+    .footer-link:hover {
+        color: #2eb1a8;      /* 悬停时稍微深一点 */
+        text-decoration: underline; /* 只有鼠标指上去才显示下划线 */
+    }
+
+    /* 呼吸动画定义 */
+    @keyframes beta-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(57, 197, 187, 0.5); }
+        70% { box-shadow: 0 0 0 6px rgba(57, 197, 187, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(57, 197, 187, 0); }
+    }
+
+    /* 标签基础样式 */
+    .version-badge {
+        background-color: #ffffff; /* 初始为白底 */
+        color: #39C5BB !important; /* 青字 */
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid #39C5BB;
+        animation: beta-pulse 2s infinite; /* 开启呼吸 */
+        transition: all 0.2s ease;
+    }
+
+    /* 悬停时的反色效果 */
+    .version-badge:hover {
+        background-color: #39C5BB !important;
+        color: #ffffff !important;
+        animation-play-state: paused; /* 悬停时停止呼吸，保持稳定感 */
+    }
+
+
+
+
+
+    .upload-icon-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        /* 增加垂直外边距，给波纹留下扩散的物理空间 */
+        padding: 40px 0; 
+    }
+
+    .upload-icon-svg {
+        /* 核心：允许 SVG 内部的波纹扩散到 viewBox 之外而不被剪裁 */
+        overflow: visible !important;
+    }
+
+    /* 实心云：使用你要求的深蓝色 */
+    .cloud-solid {
+        fill: #0d6efd; 
+    }
+
+    /* 箭头：强制纯白色，并确保它在云朵层之上 */
+    .arrow-white-classic {
+        fill: #ffffff !important;
+    }
+
+    /* 波纹：仅青色轮廓，缓慢扩散 */
+    .cloud-ripple {
+        fill: none;
+        stroke: #39C5BB;
+        stroke-width: 6;
+        opacity: 0;
+        transform-origin: 320px 256px; /* 设定 SVG 的几何中心 */
+        animation: ripple-gentle 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .ripple-slow-1 { animation-delay: 0s; }
+    .ripple-slow-2 { animation-delay: 2s; }
+
+    @keyframes ripple-gentle {
+        0% {
+            transform: scale(1);
+            opacity: 0.5;
+            stroke-width: 6;
+        }
+        /* 缩放比例限制在 1.4 倍，这样波纹不会扩散到太夸张遮挡文字 */
+        100% {
+            transform: scale(1.4);
+            opacity: 0;
+            stroke-width: 1;
+        }
+    }
+
+
+
+
+
+</style>
+
+</head>
+<body>
+
+<nav class="navbar navbar-dark mb-4 shadow-sm">
+    <div class="container d-flex justify-content-between align-items-center">
+        <span class="navbar-brand mb-0 h1 d-flex align-items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="me-2">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                <rect x="7" y="7" width="10" height="10" rx="1"></rect>
+            </svg>
+            K49 Classification System
+        </span>
+
+        <a href="https://hub.docker.com/r/mikulab/k49-api" target="_blank" class="version-badge rounded-pill px-3 py-1">
+            V1.3 Beta
+        </a>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <ul class="nav nav-pills mb-4 justify-content-center" id="pills-tab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active px-4" id="pills-single-tab" data-bs-toggle="pill" data-bs-target="#pills-single" type="button">
+                        <i class="fas fa-image me-2"></i>Single
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link px-4" id="pills-batch-tab" data-bs-toggle="pill" data-bs-target="#pills-batch" type="button">
+                        <i class="fas fa-layer-group me-2"></i>Multiple
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="pills-tabContent">
+                <div class="tab-pane fade show active" id="pills-single">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <div class="drop-zone" id="singleDropZone">
+
+                                <div class="upload-icon-wrapper mb-3">
+                                    <svg class="upload-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" style="width: 90px;">
+                                        <defs>
+                                            <path id="cloud-path-standard" d="M537.6 226.6c4.1-10.7 6.4-22.4 6.4-34.6 0-53-43-96-96-96-19.7 0-38.1 6-53.3 16.2C367 64.2 315.3 32 256 32c-88.4 0-160 71.6-160 160 0 2.7.1 5.4.2 8.1C40.2 219.8 0 273.2 0 336c0 79.5 64.5 144 144 144h368c70.7 0 128-57.3 128-128 0-61.9-44-113.6-102.4-125.4z"/>
+                                        </defs>
+
+                                        <use href="#cloud-path-standard" class="cloud-ripple ripple-slow-2"></use>
+                                        <use href="#cloud-path-standard" class="cloud-ripple ripple-slow-1"></use>
+
+                                        <use href="#cloud-path-standard" class="cloud-solid"></use>
+                                        
+                                        <path class="arrow-white-classic" d="M223 263c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l39-39V392c0 13.3 10.7 24 24 24s24-10.7 24-24V257.9l39 39c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-80-80c-9.4-9.4-24.6-9.4-33.9 0l-80 80z"/>
+                                    </svg>
+                                </div>
+                                
+                                <h5 class="fw-bold">Upload Image</h5>
+                                <p class="text-muted small">Drag & drop or click to browse (PNG/JPG)</p>
+                                <input type="file" id="singleInput" accept="image/*" hidden>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                                                    
+                            <div id="singleResult" class="mt-4" style="display: none;">
+                                <div class="p-3 bg-light rounded-3">
+                                    <div class="row align-items-center">
+                                        <div class="col-4 text-center">
+                                            <div class="text-uppercase fw-bold text-muted x-small mb-2">Input</div>
+                                            <img id="singlePreview" src="" class="img-fluid rounded shadow-sm border" style="max-height: 120px;">
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <div class="text-uppercase fw-bold text-muted x-small mb-1">Prediction</div>
+                                            <div class="char-display" id="predChar">?</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="small fw-bold text-muted mb-1">Confidence: <span id="predConf" class="text-dark">0%</span></div>
+                                            <div class="progress mb-3" style="height: 8px;">
+                                                <div id="confBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted"><i class="far fa-clock me-1"></i>Latency: <span id="predTime" class="fw-bold">0</span>ms</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="pills-batch">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Select Multiple Files</label>
+                                <input class="form-control form-control-lg" type="file" id="batchInput" multiple accept="image/*">
+                            </div>
+                            <button class="btn btn-primary btn-lg w-100 shadow-sm" onclick="uploadBatch()">
+                                <i class="fas fa-bolt me-2"></i>Run Batch Recognition
+                            </button>
+                            
+                            <div class="mt-4 loader text-center" id="batchLoader">
+                                <div class="spinner-grow text-primary" role="status"></div>
+                                <p class="mt-3 fw-medium text-secondary" id="batchStatus">Processing queue...</p>
+                            </div>
+
+                            <div class="row mt-4 g-3" id="batchResults">
+                                </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="mt-5 text-center text-muted small">
+                <p>Powered by 
+                    <strong>
+                        <a href="https://mikulab.com" target="_blank" class="footer-link">MikuLab</a> 
+                        x FastAPI x Pytorch x Redis x Docker
+                    </strong>
+                </p>
+            </footer>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // JS Logic remains the same, updated strings for UI feedback
+    const singleZone = document.getElementById('singleDropZone');
+    const singleInput = document.getElementById('singleInput');
+
+    singleZone.addEventListener('click', () => singleInput.click());
+    singleInput.addEventListener('change', (e) => handleSingleUpload(e.target.files[0]));
+
+    async function handleSingleUpload(file) {
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('singlePreview').src = e.target.result;
+            document.getElementById('singleResult').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/predict', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            document.getElementById('predChar').innerText = data.character;
+            document.getElementById('predConf').innerText = (data.confidence * 100).toFixed(1) + '%';
+            document.getElementById('predTime').innerText = data.time_ms;
+            
+            const bar = document.getElementById('confBar');
+            bar.style.width = (data.confidence * 100) + '%';
+            bar.className = data.confidence > 0.8 ? 'progress-bar bg-success' : 'progress-bar bg-warning';
+            
+        } catch (err) {
+            console.error(err);
+            alert('Analysis failed. Please check your connection.');
+        }
+    }
+
+    async function uploadBatch() {
+        const input = document.getElementById('batchInput');
+        if (input.files.length === 0) return alert("Please select files first!");
+
+        const container = document.getElementById('batchResults');
+        container.innerHTML = ''; 
+        document.getElementById('batchLoader').style.display = 'block';
+
+        const formData = new FormData();
+        const fileMap = {}; 
+        
+        Array.from(input.files).forEach((file, index) => {
+            formData.append('files', file);
+            fileMap[index] = URL.createObjectURL(file);
+        });
+
+        try {
+            const res = await fetch('/batch_predict', { method: 'POST', body: formData });
+            const data = await res.json();
+            const taskIds = data.task_ids;
+
+            document.getElementById('batchStatus').innerText = `Enqueued ${taskIds.length} tasks...`;
+            await pollResults(taskIds, fileMap);
+
+        } catch (err) {
+            alert('Batch submission failed: ' + err);
+            document.getElementById('batchLoader').style.display = 'none';
+        }
+    }
+
+    async function pollResults(taskIds, fileMap) {
+        const results = {};
+        let pending = taskIds.length;
+        const container = document.getElementById('batchResults');
+
+        const interval = setInterval(async () => {
+            let allDone = true;
+            
+            for (let i = 0; i < taskIds.length; i++) {
+                const tid = taskIds[i];
+                if (results[tid]) continue;
+
+                const res = await fetch(`/tasks/${tid}`);
+                const data = await res.json();
+
+                if (data.status === 'completed') {
+                    results[tid] = data.result;
+                    addBatchCard(container, fileMap[i], data.result);
+                    pending--;
+                } else if (data.status === 'failed') {
+                    results[tid] = 'error';
+                    addBatchCard(container, fileMap[i], null, true);
+                    pending--;
+                } else {
+                    allDone = false;
+                }
+            }
+
+            document.getElementById('batchStatus').innerText = `Tasks remaining: ${pending}`;
+
+            if (allDone) {
+                clearInterval(interval);
+                document.getElementById('batchLoader').style.display = 'none';
+            }
+        }, 1000);
+    }
+
+    function addBatchCard(container, imgSrc, result, isError=false) {
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-3';
+        
+        let content = '';
+        if (isError) {
+            content = `<h3 class="text-danger mb-0"><i class="fas fa-circle-xmark"></i></h3>`;
+        } else {
+            const color = result.confidence > 0.8 ? 'text-success' : 'text-warning';
+            content = `
+                <h2 class="mb-0 fw-bold ${color}">${result.character}</h2>
+                <div class="small text-muted fw-bold">${(result.confidence*100).toFixed(0)}% Match</div>
+            `;
+        }
+
+        col.innerHTML = `
+            <div class="card result-card text-center h-100 border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <img src="${imgSrc}" class="img-fluid rounded mb-2 border" style="height: 60px; width: 60px; object-fit: cover;">
+                    <div>${content}</div>
+                </div>
+            </div>
+        `;
+        container.appendChild(col);
+    }
+</script>
+</body>
+</html>
