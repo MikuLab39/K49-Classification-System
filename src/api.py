@@ -12,6 +12,12 @@ from src.preprocess import transform_image, get_character
 from src.config import REDIS_URL, QUEUE_NAME
 from src.tasks import predict_task 
 
+# 打开 src/api.py
+from fastapi import FastAPI, File, UploadFile, HTTPException
+# [新增] 引入 StaticFiles 和 FileResponse
+from fastapi.staticfiles import StaticFiles 
+from fastapi.responses import FileResponse
+
 # Global State
 api_model = None
 redis_conn = None
@@ -44,6 +50,15 @@ async def lifespan(app: FastAPI):
     print("[API] Shutting down...")
 
 app = FastAPI(title="K49 API (Sync/Async)", version="2.0", lifespan=lifespan)
+
+# [新增] 1. 挂载 static 目录，用于提供 css/js/html
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# [新增] 2. 覆盖根路由，返回我们刚写的 HTML 页面
+@app.get("/")
+async def read_index():
+    # 这会读取 static/index.html 并返回给浏览器
+    return FileResponse("static/index.html")
 
 @app.get("/")
 def health_check():
